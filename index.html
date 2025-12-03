@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Decoupled Skeleton Tracking and Avatar Retargeting</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      line-height: 1.6;
+      background: #111;
+      color: #eee;
+    }
+    header {
+      background: #222;
+      padding: 1.5rem 2rem;
+      border-bottom: 1px solid #333;
+    }
+    header h1 {
+      margin: 0 0 0.25rem 0;
+      font-size: 1.8rem;
+    }
+    header p {
+      margin: 0;
+      font-size: 0.95rem;
+      color: #aaa;
+    }
+    main {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 1.5rem 1rem 3rem;
+    }
+    section {
+      margin-bottom: 2rem;
+    }
+    h2 {
+      margin-top: 0;
+      border-bottom: 1px solid #333;
+      padding-bottom: 0.25rem;
+      font-size: 1.3rem;
+    }
+    .two-col {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+    .two-col > div {
+      flex: 1 1 280px;
+    }
+    .media-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+      margin-top: 0.5rem;
+    }
+    .media-row video, .media-row img {
+      max-width: 100%;
+      border-radius: 6px;
+      border: 1px solid #333;
+      background: #000;
+    }
+    ul {
+      padding-left: 1.2rem;
+    }
+    footer {
+      text-align: center;
+      padding: 1rem;
+      border-top: 1px solid #333;
+      color: #777;
+      font-size: 0.85rem;
+    }
+    a {
+      color: #6fb4ff;
+    }
+    code {
+      background: #222;
+      padding: 0.1rem 0.25rem;
+      border-radius: 3px;
+      font-size: 0.9em;
+    }
+	.youtube-embed {
+	  position: relative;
+	  flex: 1 1 280px;
+	  max-width: 100%;
+	}
+
+	.youtube-embed::before {
+	  content: "";
+	  display: block;
+	  padding-top: 56.25%; /* 16:9 aspect ratio */
+	}
+
+	.youtube-embed iframe {
+	  position: absolute;
+	  top: 0;
+	  left: 0;
+	  width: 100%;
+	  height: 100%;
+	  border: 1px solid #333;
+	  border-radius: 6px;
+	  background: #000;
+	}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Decoupled Skeleton Tracking and Avatar Retargeting for Real-Time Motion Capture</h1>
+    <p>Graduate Project – Ryan Sanchez – UTSA</p>
+  </header>
+
+  <main>
+    <section id="abstract">
+      <h2>Abstract</h2>
+      <p>
+        Real-time character animation pipelines are typically built as tightly coupled stacks, where skeleton tracking,
+        coordinate handling, and avatar control are all intertwined. This project proposes a decoupled architecture that
+        separates skeleton tracking from avatar retargeting, enabling different pose sources (Azure Kinect depth tracking
+        and webcam-based MediaPipe pose estimation) to drive multiple avatars (Rocketbox, Mixamo, SMPLX-style) with minimal changes.
+      </p>
+      <p>
+        The method normalizes joint data into a neutral representation and applies shared retargeting rules—bind-pose-relative
+        rotations, explicit body forward estimation, and temporal smoothing—implemented across two Unity projects. Qualitative
+        experiments demonstrate stable full-body motion and reusable retargeting behavior, while highlighting limitations such
+        as jitter, flips, lack of IK, and rig-specific mappings that motivate future work.
+      </p>
+    </section>
+
+    <section id="media">
+      <h2>Demo Videos</h2>
+      <p>Short clips illustrating the different trackers and avatars:</p>
+      <div class="media-row">
+        <!-- Replace src with your actual video/image URLs -->
+        <video src="kinect_rocketbox.mp4" controls></video>
+        <video src="kinect_mixamo.mp4" controls></video>
+        <div class="youtube-embed">
+		  <iframe
+			src="https://www.youtube.com/embed/IdeHev7PQoo"
+			title="Project demo"
+			frameborder="0"
+			allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+			allowfullscreen>
+		  </iframe>
+		</div>
+      </div>
+    </section>
+
+    <section id="introduction">
+      <h2>Introduction</h2>
+      <p>
+        Many real-time motion capture demos are built as monolithic pipelines that bind a specific sensor, a specific
+        tracking library, and a specific character rig together. While these systems can produce impressive results, they
+        are difficult to extend or reuse: changing the sensor or the avatar often means rewriting substantial portions of
+        the pipeline.
+      </p>
+      <p>
+        This project aims to separate <strong>skeleton tracking</strong> from <strong>avatar retargeting</strong> in Unity,
+        so that different pose trackers (Azure Kinect body tracking, MediaPipe Pose) can drive different avatars
+        (Rocketbox, Mixamo, SMPLX-style) with minimal coupling and cleaner debugging.
+      </p>
+    </section>
+
+    <section id="background">
+      <h2>Related Work &amp; Background</h2>
+      <ul>
+        <li><strong>Kinect / Azure Kinect Body Tracking:</strong> Depth-based skeleton estimation with joint positions and orientations.</li>
+        <li><strong>MediaPipe Pose:</strong> RGB-based human pose estimation that infers 2D/3D landmarks, robust to occlusion but weak in metric depth.</li>
+        <li><strong>SMPL / SMPLX:</strong> Parametric body models often used as targets for pose retargeting in research and demos.</li>
+        <li><strong>Avatar Libraries:</strong> Rocketbox avatars and Mixamo characters provide rigged meshes for real-time animation.</li>
+      </ul>
+      <p>
+        Most existing pipelines are tuned to a single combination of sensor and rig. This work focuses on making the
+        retargeting layer more general and reusable.
+      </p>
+    </section>
+
+    <section id="approach">
+      <h2>Approach</h2>
+      <div class="two-col">
+        <div>
+          <h3>Decoupled Architecture</h3>
+          <ul>
+            <li>Separate <em>tracking</em> from <em>retargeting</em>.</li>
+            <li>Convert raw sensor output into a neutral <code>SkeletonData</code>-style representation.</li>
+            <li>Apply shared retargeting rules:
+              <ul>
+                <li>Bind-pose-relative rotations</li>
+                <li>Consistent body forward vector</li>
+                <li>Temporal smoothing and NaN/exception guards</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+        <div>
+          <h3>Two Unity Pipelines</h3>
+          <ul>
+            <li><strong>Azure Kinect project:</strong>
+              <ul>
+                <li>Uses Azure Kinect + K4AdotNet to obtain joint positions and orientations.</li>
+                <li>Custom <code>SkeletonTracker</code> feeds <code>RocketboxAvatarDriver</code> or a Humanoid driver.</li>
+                <li>Maps joints to Rocketbox bones or Unity <code>HumanBodyBones</code>.</li>
+              </ul>
+            </li>
+            <li><strong>MediaPipe webcam project:</strong>
+              <ul>
+                <li>Uses MediaPipe Pose world landmarks as joint positions.</li>
+                <li><code>MedPipe2HumanoidAvatar_Retarget</code> reconstructs bone directions and rotations.</li>
+                <li><code>MediapipeHumanoidDriver</code> drives a humanoid avatar (e.g., SMPLX-like).</li>
+              </ul>
+            </li>
+          </ul>
+        </div>
+      </div>
+    </section>
+
+    <section id="experiments">
+      <h2>Experiments &amp; Results</h2>
+      <p>
+        Rather than numerical benchmarks, this project evaluates the architecture qualitatively across several scenarios:
+      </p>
+      <ul>
+        <li><strong>Azure Kinect → Rocketbox:</strong> stable full-body tracking, accurate hip and spine orientation, reasonable limb alignment.</li>
+        <li><strong>Azure Kinect → Mixamo:</strong> same tracking pipeline successfully driving multiple humanoid avatars with minimal changes.</li>
+        <li><strong>Webcam → SMPLX-style avatar:</strong> good limb inference under occlusion, but more jitter and weaker global motion due to lack of depth.</li>
+      </ul>
+      <p>
+        These experiments demonstrate that the retargeting principles generalize across sensors and rigs, while also exposing the limits of image-only pose estimation and per-frame retargeting.
+      </p>
+    </section>
+	
+	<section id="resources">
+	  <h2>Code, Poster, and Slides</h2>
+	  <ul>
+		<li><strong>GitHub (Azure Kinect project):</strong>
+		  <a href="https://github.com/yourname/azure-kinect-avatar" target="_blank">
+			github.com/yourname/azure-kinect-avatar
+		  </a>
+		</li>
+		<li><strong>GitHub (Webcam / MediaPipe project):</strong>
+		  <a href="https://github.com/yourname/mediapipe-avatar" target="_blank">
+			github.com/yourname/mediapipe-avatar
+		  </a>
+		</li>
+		<li><strong>Poster (PNG):</strong>
+		  <a href="poster.png" target="_blank">Download project poster</a>
+		</li>
+		<li><strong>Presentation slides (PPTX):</strong>
+		  <a href="pose_slides.pptx" target="_blank">Download slide deck</a>
+		</li>
+		<li><strong>Presentation video (MP4):</strong>
+		  <a href="presentation.mp4" target="_blank">Watch presentation video</a>
+		</li>
+	  </ul>
+	</section>
+
+    <section id="discussion">
+      <h2>Discussion, Limitations, &amp; Future Work</h2>
+      <h3>Limitations</h3>
+      <ul>
+        <li>Per-frame retargeting with basic smoothing leads to jitter and occasional full-body flips, especially in the webcam setup.</li>
+        <li>No IK or explicit foot locking, so contact stability and foot sliding remain issues (especially for webcam-based tracking).</li>
+        <li>Each pipeline currently expects a specific rig mapping (Rocketbox bones, Humanoid mapping, SMPLX skeleton).</li>
+        <li>Single-sensor setups; no multi-sensor fusion is implemented yet.</li>
+      </ul>
+      <h3>Future Work</h3>
+      <ul>
+        <li>Stronger temporal filtering, flip detection, and velocity-aware smoothing.</li>
+        <li>Adding IK layers and foot locking for more grounded, physically plausible motion.</li>
+        <li>Generalized rig/retargeting descriptions to support a wider range of avatars.</li>
+        <li>Multi-sensor fusion using multiple cameras or multiple depth sensors to improve robustness under occlusion.</li>
+      </ul>
+    </section>
+
+    <section id="conclusion">
+      <h2>Conclusion</h2>
+      <p>
+        By explicitly separating skeleton tracking from avatar retargeting, this project demonstrates a flexible,
+        sensor-agnostic architecture for real-time motion capture in Unity. Normalizing joint data from Azure Kinect
+        and MediaPipe, and applying shared retargeting rules, makes it possible to reuse the same conceptual pipeline
+        across Rocketbox, Mixamo, and SMPLX-style avatars while keeping the system debuggable and extensible.
+      </p>
+      <p>
+        The remaining issues—jitter, flips, lack of IK, and rig-specific mappings—are not failures of the architecture
+        but invitations to add more layers (temporal reasoning, IK, sensor fusion) on top of a clean foundation.
+      </p>
+    </section>
+	
+	<!--
+	<section id="screenshots">
+	  <h2>Screenshots</h2>
+	  <div class="media-row">
+		<img src="kinect_rocketbox_frame.png" alt="Azure Kinect driving Rocketbox avatar" />
+		<img src="kinect_mixamo_frame.png" alt="Azure Kinect driving Mixamo avatar" />
+		<img src="mediapipe_smplx_frame.png" alt="Webcam MediaPipe driving SMPLX avatar" />
+	  </div>
+	</section>
+	-->
+
+    <section id="references">
+      <h2>References</h2>
+      <ul>
+        <li>Microsoft Azure Kinect Body Tracking SDK – Microsoft.</li>
+        <li>K4AdotNet – .NET wrapper for Azure Kinect.</li>
+        <li>MediaPipe Pose – Google Research.</li>
+        <li>SMPL / SMPLX parametric body models – relevant academic papers.</li>
+        <li>Rocketbox Avatars – Microsoft Rocketbox avatar library.</li>
+        <li>Mixamo – Adobe Mixamo character and animation library.</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer>
+    &copy; Your Name – UTSA – Decoupled Skeleton Tracking and Avatar Retargeting Project
+  </footer>
+</body>
+</html>
